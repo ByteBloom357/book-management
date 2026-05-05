@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>document</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: #f4f7f6; color: #333; }
+        nav { background: #2c3e50; color: white; padding: 15px; margin-bottom: 25px; border-radius: 8px; display: flex; gap: 20px; }
+        nav a { color: #ecf0f1; text-decoration: none; font-weight: bold; transition: 0.3s; }
+        nav a:hover { color: #3498db; }
+        
+        .page { display: none; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .page.active { display: block; }
+        
+        input, textarea { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; }
+        button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: 0.2s; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-warning { background: #f1c40f; color: #333; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; color: #7f8c8d; }
+        
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(3px); z-index: 1000; }
+        .modal-content { background: white; margin: 5% auto; padding: 30px; width: 90%; max-width: 500px; border-radius: 15px; position: relative; }
+        .close { position: absolute; right: 20px; top: 15px; font-size: 24px; cursor: pointer; }
+        
+        .empty-msg { text-align: center; color: #95a5a6; padding: 40px; font-style: italic; }
+        .badge { background: #e74c3c; color: white; padding: 2px 7px; border-radius: 10px; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+<nav>
+    <a href="admin.html"> Адмін-панель</a>
+    <a href="shop.html">Магазин</a>
+    <a href="lists.html"> Бажання & Кошик</a>
+</nav>
+
+<div id="admin" class="page active">
+    <h2> Управління бібліотекою</h2>
+    <div style="display: flex; gap: 10px; margin: 20px 0;">
+        <button class="btn-primary" onclick="openAddModal()">+ Додати нову книгу</button>
+        <input type="text" id="admin-search" placeholder="Швидкий пошук за назвою, автором або жанром..." onkeyup="renderAdmin()">
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Назва</th>
+                <th>Автор</th>
+                <th>Жанр</th>
+                <th>Рік</th>
+                <th>Дії</th>
+            </tr>
+        </thead>
+        <tbody id="admin-tbody"></tbody>
+    </table>
+</div>
+
+<div id="book-modal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal()">&times;</span>
+        <h2 id="modal-title">Книга</h2>
+        <form id="book-form">
+            <input type="text" id="title" placeholder="Назва книги" required>
+            <input type="text" id="author" placeholder="Автор" required>
+            <input type="text" id="genre" placeholder="Жанр" required>
+            <input type="date" id="date" required>
+            <textarea id="description" placeholder="Короткий опис книги..." rows="4" required></textarea>
+            <div style="text-align: right;">
+                <button type="button" class="btn-warning" onclick="closeModal()">Скасувати</button>
+                <button type="submit" class="btn-success">Зберегти зміни</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="detail-modal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeDetailModal()">&times;</span>
+        <div id="book-detail"></div>
+    </div>
+</div>
+
+<script>
+
+class BookManager {
+    constructor() {
+        this.books = JSON.parse(localStorage.getItem("books")) || [];
+    }
+    save() { localStorage.setItem("books", JSON.stringify(this.books)); }
+    add(book) {
+        book.id = Date.now();
+        this.books.push(book);
+        this.save();
+    }
+    update(updatedBook) {
+        this.books = this.books.map(b => b.id === Number(updatedBook.id) ? { ...updatedBook, id: Number(updatedBook.id) } : b);
+        this.save();
+    }
+    delete(id) {
+        this.books = this.books.filter(b => b.id !== Number(id));
+        this.save();
+    }
+    getById(id) {
+        return this.books.find(b => b.id === Number(id));
+    }
+}
+
+class StorageManager {
+    constructor(key) {
+        this.key = key;
+        this.items = JSON.parse(localStorage.getItem(key)) || [];
+    }
+    save() { localStorage.setItem(this.key, JSON.stringify(this.items)); }
+    toggle(id) {
+        id = Number(id);
+        if (this.items.includes(id)) {
+            this.items = this.items.filter(i => i !== id);
+        } else {
+            this.items.push(id);
+        }
+        this.save();
+    }
+    has(id) { return this.items.includes(Number(id)); }
+    remove(id) { this.items = this.items.filter(i => i !== Number(id)); this.save(); }
+    clear() { this.items = []; this.save(); }
+}
+
+const bookManager = new BookManager();
+const wishlist = new StorageManager("wishlist");
+const cart = new StorageManager("cart");
+let editingId = null;
+
+
+
+function getFilteredBooks(query) {
+    const q = query.toLowerCase();
+    return bookManager.books.filter(b => 
+        b.title.toLowerCase().includes(q) ||
+        b.author.toLowerCase().includes(q) ||
+        b.genre.toLowerCase().includes(q) ||
+        b.date.includes(q)
+    );
+}
+
+
+
+function renderAdmin() {
+    const query = $("#admin-search").val();
+    const $tbody = $("#admin-tbody").empty();
+    
+    getFilteredBooks(query).forEach(book => {
+        $tbody.append(`
+            <tr>
+                <td><a href="#" onclick="openDetailModal(${book.id})"><b>${book.title}</b></a></td>
+                <td>${book.author}</td>
+                <td>${book.genre}</td>
+                <td>${book.date}</td>
+                <td>
+                    <button class="btn-warning" onclick="openEditModal(${book.id})">✏️</button>
+                    <button class="btn-danger" onclick="deleteBook(${book.id})">🗑</button>
+                </td>
+            </tr>
+        `);
+    });
+}
+
+function renderAll() {
+    renderAdmin();
+}
+
+
+function openAddModal() {
+    editingId = null;
+    $("#modal-title").text("Додати нову книгу");
+    $("#book-form")[0].reset();
+    $("#book-modal").fadeIn();
+}
+
+function openEditModal(id) {
+    const b = bookManager.getById(id);
+    editingId = id;
+    $("#modal-title").text("Редагування");
+    $("#title").val(b.title);
+    $("#author").val(b.author);
+    $("#genre").val(b.genre);
+    $("#date").val(b.date);
+    $("#description").val(b.description);
+    $("#book-modal").fadeIn();
+}
+
+function openDetailModal(id) {
+    const b = bookManager.getById(id);
+    $("#book-detail").html(`
+        <h2>${b.title}</h2>
+        <p><b>Автор:</b> ${b.author}</p>
+        <p><b>Жанр:</b> ${b.genre} | <b>Дата:</b> ${b.date}</p>
+        <p style="margin-top:15px; line-height:1.6">${b.description}</p>
+    `);
+    $("#detail-modal").fadeIn();
+}
+
+function closeModal() { $(".modal").fadeOut(); }
+function closeDetailModal() { $("#detail-modal").fadeOut(); }
+
+function deleteBook(id) {
+    if (confirm("Видалити цю книгу з бази?")) {
+        bookManager.delete(id);
+        wishlist.remove(id);
+        cart.remove(id);
+        renderAll();
+    }
+}
+
+
+$("#book-form").on("submit", function(e) {
+    e.preventDefault();
+    const bookData = {
+        id: editingId,
+        title: $("#title").val(),
+        author: $("#author").val(),
+        genre: $("#genre").val(),
+        date: $("#date").val(),
+        description: $("#description").val()
+    };
+    
+    editingId ? bookManager.update(bookData) : bookManager.add(bookData);
+    closeModal();
+    renderAll();
+});
+
+
+window.onclick = e => { if ($(e.target).hasClass('modal')) closeModal(); };
+
+$(document).ready(renderAll);
+</script>
+</body>
+</html>
